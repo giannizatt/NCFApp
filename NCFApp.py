@@ -44,6 +44,9 @@ class Application(tk.Frame):
         self.createWidgets()
 
     def createWidgets(self):
+        self.canvas1 = tk.Canvas(self,width=600,height=150)
+        self.canvas1.grid()
+        self.imglogo = PIL.Image.open('Logo.jpg')
         self.quitButton = tk.Button(self, text='Quit', background='darkred', command=self.quit)
         self.quitButton.grid()
         
