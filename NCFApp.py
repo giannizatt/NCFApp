@@ -9,7 +9,7 @@ import pandas            as pd   # libreria per la gestione del file csv
 import seaborn           as sb   # libreria per la costruzione di grafici
 import matplotlib.pyplot as plt  # libreria ausiliaria per la costruzione di grafici
 import Tkinter           as tk   # libreria per l'interfaccia grafica
-
+import PIL                       # libreria per la gestione delle immagini
 
 # Carica il dataframe dei dati dal file csv
 
@@ -34,6 +34,13 @@ def SimplePlot(SeriePandas=None,LabelofSerie=None):
     plt.legend()
     return plt.figure()
 
+# Funzione che data una serie ne calcola il forecast
+def Forecast(SeriePandas=None):
+    firstlist=[]
+    lengthseries = max(SeriePandas.index)
+    for i in range(12,lengthseries+1):
+        firstlist[i-12] = SeriePandas[i]-SeriePandas[i-12]
+    return firstlist
 
 # Frame principale
 
@@ -44,9 +51,16 @@ class Application(tk.Frame):
         self.createWidgets()
 
     def createWidgets(self):
-        self.canvas1 = tk.Canvas(self,width=600,height=150)
-        self.canvas1.grid()
         self.imglogo = PIL.Image.open('Logo.jpg')
+        self.imgA = self.imglogo.resize(size=(600,150))
+        self.imgB = PIL.ImageTk.PhotoImage(self.imgA)
+        self.canvas1 = tk.Canvas(self,width=600,height=150)
+        self.canvas1.create_image(300,75,image=self.imgB)
+        self.canvas1.grid()
+        
+        self.label = tk.Label(text = 'Last consuntive '+Lastcons())
+        self.label.grid()
+        
         self.quitButton = tk.Button(self, text='Quit', background='darkred', command=self.quit)
         self.quitButton.grid()
         
