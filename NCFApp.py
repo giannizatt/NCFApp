@@ -21,7 +21,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
 from Tkinter import *
-import tkMessageBox
+#import tkMessageBox
 
 from PIL import ImageTk, Image
 
@@ -62,7 +62,7 @@ class Application:
     
     def __init__(self,master):
         
-        self.df_cons, self.df_pred, self.df_fore = self.PreparaFrame()
+        self.df_cons, self.df_pred, self.df_fore, self.df_prop, self.df_modu = self.PreparaFrame()
         self.ultimo_consuntivo = max(self.df_cons.index)
         self.index_forecast    = self.df_fore.index
         
@@ -189,7 +189,7 @@ class Application:
         return tms_object
     
     def PreparaFrame(self) : 
-        dfp = pd.read_csv('NCFAdati.csv',sep=',',index_col=0, parse_dates=True, infer_datetime_format=True)
+        dfp = pd.read_csv('NCFAdati1.csv',sep=';',index_col=0, parse_dates=True, infer_datetime_format=True)
         dframecons = pd.DataFrame(index = dfp.index)
         for txt1 in self.Tipomisura_file  :
             for txt2 in self.Tipocliente_file :
@@ -206,7 +206,9 @@ class Application:
 
         dframepred = pd.DataFrame(columns=dframecons.columns, index = dframecons.index)
         dframefore = pd.DataFrame(columns=dframecons.columns, index = index_forecast)
-        return dframecons, dframepred, dframefore
+        dframeprop = pd.read_csv('NCFAdati2.csv',sep=';',index_col=0)
+        dframemodu = pd.DataFrame(index = index_forecast)
+        return dframecons, dframepred, dframefore, dframeprop, dframemodu
     
     def ButtonForecast(self,evento) :
         self.ForecastManager()
@@ -300,6 +302,16 @@ class Application:
         dfcomp = pd.concat([dfcons,dffore])
         dfcomp.to_csv('NCFAcomp.csv',sep=';')
         self.Wlog('Scaricati dati completi su file csv : NCFAcomp.csv')
+        self.Riproporziona()
+        self.df_modu.to_csv('NCFAmodu.csv',sep=';')
+        self.Wlog('Riproporzionamento sui moduli effettuato su file csv : NCFAmodu.csv')
+
+    def Riproporziona(self) :
+        h1 = self.df_prop.groupby(['FORE'])['STOCK'].sum()
+        h1.rename(columns={'STOCK' : 'SUM_STOCK'}, inplace = True)
+        h2 = self.df_prop.merge(h1, on = 'FORE', how = 'left')
+        print h2
+        pass
 
     def Forecast(self, TMS_orig = None):
         # Funzione che data una serie ne calcola il forecast
