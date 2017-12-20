@@ -38,10 +38,10 @@ Decl['CP'] = 'CLIENTI PERSI'
 Decl['FN'] = 'FLUSSO NETTO'
 Decl['ST'] = 'STOCK'
 Decl['IMP'] = 'IMPRESE'
-Decl['PER'] = 'PERSONAL'
+Decl['PRS'] = 'PERSONAL'
 Decl['AZR'] = 'AZIENDE RETAIL'
 Decl['RET'] = 'PRIVATI RETAIL'
-Decl['TOTRET'] = 'TOTALE RETAIL'
+#Decl['TOTRET'] = 'TOTALE RETAIL'
 Decl['BDT'] = 'TOTALE BDT'
 Decl['CONS'] = 'CONSUNTIVO'
 Decl['FORE'] = 'FORECAST prospect'
@@ -53,11 +53,11 @@ class Application:
     index_forecast    = object
     FlagForecast      = False
     Tipomisura       = ('FL','CP','FN')
-    Tipomisura_file  = ('FL','CP')
+    #Tipomisura_file  = ('FL','CP')
     Tipomisura_fore  = ('FL','CP')
-    Tipocliente      = ('IMP','PER','AZR','RET','TOTRET','BDT')
-    Tipocliente_file = ('IMP','PER','AZR','RET')
-    Tipocliente_fore = ('IMP','PER','AZR','RET')
+    Tipocliente      = []#('IMP','PRS','AZR','RET','TOTRET','BDT')
+    Tipocliente_fore = []#('IMP','PRS','AZR','RET')
+    Tipomodulo       = []
     Tiposerie        = ('CONS','PRED','FORE')
     
     def __init__(self,master):
@@ -188,17 +188,36 @@ class Application:
             tms_object = timeserie[-37:]
         return tms_object
     
+    def TotaleBDT(self, misura, frame) :
+        columns = []
+        for cliente in self.Tipocliente_fore :
+            columns.append(misura+'_'+cliente)
+        frame = frame[columns].dropna(how='all')
+        serie = frame.sum(axis='columns')
+        return serie
+    
+    def CalcolaFN(self, cliente, frame) :
+        head1 = 'FL_'+cliente
+        head2 = 'CP_'+cliente
+        serie = frame[head1]-frame[head2]
+        return serie
+    
     def PreparaFrame(self) : 
-        dfp = pd.read_csv('NCFAdati1.csv',sep=';',index_col=0, parse_dates=True, infer_datetime_format=True)
-        dframecons = pd.DataFrame(index = dfp.index)
-        for txt1 in self.Tipomisura_file  :
-            for txt2 in self.Tipocliente_file :
-                dframecons[txt1+'_'+txt2] = self.Reducto(dfp[txt1+'_'+txt2])
-        for txt in self.Tipocliente_file :
-            dframecons['FN_'+txt] = dframecons['FL_'+txt] - dframecons['CP_'+txt]
+        dfp1 = pd.read_csv('NCFAdati1.csv',sep=';',index_col=0, parse_dates=True, infer_datetime_format=True)
+        dfp2 = pd.read_csv('NCFAdati2.csv',sep=';',index_col=0)
+        self.Tipomodulo = list(set(dfp2.index.tolist()))
+        self.Tipomodulo.sort()
+        self.Tipocliente_fore = list(set(dfp2['FORE'].tolist()))
+        self.Tipocliente = list(self.Tipocliente_fore)
+        self.Tipocliente.append('BDT')
+        dframecons = pd.DataFrame(index = dfp1.index)
+        for txt2 in self.Tipocliente_fore :
+            for txt1 in self.Tipomisura_fore :
+                dframecons[txt1+'_'+txt2] = self.Reducto(dfp1[txt1+'_'+txt2])
+            dframecons['FN_'+txt2] = self.CalcolaFN(txt2, dframecons)
         for txt in self.Tipomisura :
-            dframecons[txt+'_TOTRET'] = dframecons[txt+'_AZR'] + dframecons[txt+'_RET']
-            dframecons[txt+'_BDT']    = dframecons[txt+'_IMP'] + dframecons[txt+'_PER'] + dframecons[txt+'_AZR'] + dframecons[txt+'_RET']
+            dframecons[txt+'_BDT'] = self.TotaleBDT(txt,dframecons)
+            
         self.ultimo_consuntivo = max(dframecons.index)
         
         index_forecast = pd.date_range(self.ultimo_consuntivo, periods=1+mesi_forecast, freq='M')
@@ -206,7 +225,8 @@ class Application:
 
         dframepred = pd.DataFrame(columns=dframecons.columns, index = dframecons.index)
         dframefore = pd.DataFrame(columns=dframecons.columns, index = index_forecast)
-        dframeprop = pd.read_csv('NCFAdati2.csv',sep=';',index_col=0)
+        dframeprop = dfp2.copy()
+        #dframeprop['MODULO']=dfp2.index
         dframemodu = pd.DataFrame(index = index_forecast)
         return dframecons, dframepred, dframefore, dframeprop, dframemodu
     
@@ -275,24 +295,17 @@ class Application:
     def ForecastManager(self) :
         self.Wlog('Avviata procedura di FORECAST')
         self.FlagForecast = True
-        sequences = []
-        for txt1 in self.Tipomisura_fore : 
-            for txt2 in self.Tipocliente_file :
-                sequences.append(txt1+'_'+txt2)
-        for TMS in sequences :
-            TimeSerie = pd.Series(self.df_cons[TMS])
-            self.df_fore[TMS], self.df_pred[TMS] = self.Forecast(TimeSerie)
+        for txt2 in self.Tipocliente_fore :
+            for txt1 in self.Tipomisura_fore : 
+                TMS = txt1+'_'+txt2
+                TimeSerie = pd.Series(self.df_cons[TMS])
+                self.df_fore[TMS], self.df_pred[TMS] = self.Forecast(TimeSerie)
+            self.df_fore['FN_'+txt2] = self.CalcolaFN(txt2, self.df_fore)
+            self.df_pred['FN_'+txt2] = self.CalcolaFN(txt2, self.df_pred)
         self.Wlog('Terminata procedura di FORECAST')
-        for txt in self.Tipocliente_file :
-            self.df_fore['FN_'+txt] = self.df_fore['FL_'+txt] - self.df_fore['CP_'+txt]
-            self.df_pred['FN_'+txt] = self.df_pred['FL_'+txt] - self.df_pred['CP_'+txt]
-        self.Wlog('Ricalcolati flussi netti di Forecast')
         for txt in self.Tipomisura :
-            self.df_fore[txt+'_TOTRET'] = self.df_fore[txt+'_AZR'] + self.df_fore[txt+'_RET']
-            self.df_pred[txt+'_TOTRET'] = self.df_pred[txt+'_AZR'] + self.df_pred[txt+'_RET']
-            self.df_fore[txt+'_BDT']    = self.df_fore[txt+'_IMP'] + self.df_fore[txt+'_PER'] + self.df_fore[txt+'_AZR'] + self.df_fore[txt+'_RET']
-            self.df_pred[txt+'_BDT']    = self.df_pred[txt+'_IMP'] + self.df_pred[txt+'_PER'] + self.df_pred[txt+'_AZR'] + self.df_pred[txt+'_RET']
-        self.Wlog('Ricalcolati Totali Retail e BdT di Forecast')
+            self.df_fore[txt+'_BDT']    = self.TotaleBDT(txt,self.df_fore)
+            self.df_pred[txt+'_BDT']    = self.TotaleBDT(txt,self.df_pred)
         self.df_fore.to_csv('NCFAfore.csv',sep=';')
         self.Wlog('Scaricato Forecast su file csv : NCFAfore.csv')
         dfcons = self.df_cons.copy()
@@ -307,12 +320,26 @@ class Application:
         self.Wlog('Riproporzionamento sui moduli effettuato su file csv : NCFAmodu.csv')
 
     def Riproporziona(self) :
-        h1 = self.df_prop.groupby(['FORE'])['STOCK'].sum()
+        h1 = self.df_prop.groupby(['FORE'])['STOCK'].sum().to_frame()
+        h1['FORE']=h1.index
         h1.rename(columns={'STOCK' : 'SUM_STOCK'}, inplace = True)
         h2 = self.df_prop.merge(h1, on = 'FORE', how = 'left')
-        print h2
-        pass
-
+        h2.index = self.df_prop.index
+        h2['COEFF']=h2['STOCK']/h2['SUM_STOCK']
+        
+        for modulo in self.Tipomodulo :
+            for misura in self.Tipomisura : 
+                str_fore = h2.loc[modulo]['FORE']
+                coeff    = h2.loc[modulo]['COEFF']
+                header_input  = misura+'_'+str_fore
+                header_output = misura+'_'+modulo
+                self.df_modu[header_output] = self.df_fore[header_input] * coeff
+            grezzo = self.df_modu['FN_'+modulo]
+            primo = grezzo.iloc[0]
+            stock = h2.loc[modulo]['STOCK']
+            grezzo.iloc[0] = primo + stock
+            self.df_modu['ST_'+modulo] = grezzo.cumsum()
+            
     def Forecast(self, TMS_orig = None):
         # Funzione che data una serie ne calcola il forecast
         # l'argomento e' la serie storica originale, 
